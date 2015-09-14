@@ -1,0 +1,149 @@
+#!/usr/bin/perl
+#
+# wiki2pod - Converts wiki format to POD format.
+# The program reads wiki text from STDIN, and outputs the result to STDOUT.
+#
+
+use strict;
+use warnings;
+
+# There are two types of Wiki markups: structural markup and format markup.
+# Structural markups are processed in the main loop. Format markups are
+# processed in the subroutine convert_format_markup(). If the opening
+# markup is encountered but the closing markup is missing, it is not closed.
+sub convert_format_markup
+{
+	shift;
+	
+	# Convert *...* to B<...>.
+	s/\*(.*?)\*/B<$1>/g;
+
+	# Convert _..._ to I<...>.
+	s/_(.*?)_/I<$1>/g;
+
+	# Convert `[` to [ and `]` to ]. This is because there is no way to
+	# escape [ and ] in Wiki.
+	s/`\[`/[/g;
+	s/`\]`/]/g;
+
+	# Convert `...` to C<...>.
+	s/`(.*?)`/C<$1>/g;
+
+	return $_;
+}
+
+# list_ids[i] = the id (starting from 1) of the list with indention i.
+my @list_ids;
+
+sub close_lists_until
+{
+	my $i = shift;
+	while ($i < $#list_ids)
+	{
+		print "=back\n\n" if pop(@list_ids);
+	}
+}
+
+my $is_verbatim = 0;
+
+while (<>)
+{
+	# If we are in a verbatim block, output the line as-is with indention.
+	if ($is_verbatim) 
+	{
+		# The block is closed by a }}}.
+		if (s/^\}\}\}//)
+		{
+			$is_verbatim = 0;
+		}
+		else
+		{
+			print ' ', $_, "\n";
+		}
+		next;
+	}
+
+	# If the line starts with {{{, it starts a verbatim block.
+	if (s/^\{\{\{//)
+	{
+		$is_verbatim = 1;
+		next;
+	}
+
+	# If the line starts with #, it's a comment. Output as is.
+	if (/^#/)
+	{
+		print;
+		next;
+	}
+
+	# If the line is empty, it resets list context info.
+	if (s/^\s*$//)
+	{
+		close_lists_until(-1);
+		print;
+		next;
+	}
+
+	# If the line is indented, it is either a list or indented text.
+	# The number of spaces defines the list level. If the line starts 
+	# with * or #, it's an item list or numbered list. Otherwise, if
+	# we are currently in list context, it is treated as normal text.
+	# If we're not in any list context, it's treated as indented text.
+	if (s/^(\s+)//)
+	{
+		my $i = length($1);
+		my $is_list = s/^([*#])//;
+		my $is_numbered = $is_list && ($1 eq '#');
+		
+		# Close nested lists if the indention is smaller.
+		if ($i < $#list_ids)
+		{
+			# If the indention level does not match any previously
+			# defined indention levels, indent it more to the 
+			# closest defined indention level.
+			while ($list_ids[$i] == 0)
+			{
+				++$i;
+			}
+
+			# Close nested lists until level i.
+			close_lists_until($i);
+		}
+
+		# Indent the output if this starts a nested list.
+		if ($i > $#list_ids && $is_list)
+		{
+			$list_ids[$i] = 0;
+			print "=over\n\n";
+		}
+
+		# Manipulate list context.
+		if ($is_list)
+		{
+			++$list_ids[$i];
+			print '=item ';
+			print $list_ids[$i], '. ' if $is_numbered;
+		}
+		else
+		{
+			print "\n";
+			print ' 'x$i if $#list_ids == -1;
+		}
+		print convert_format_markup($_), "\n";
+		next;
+	}
+
+	# If the line starts with multiple =, it's a heading.
+	if (s/^[=]+//)
+	{
+		close_lists_until(-1);
+		print "=head", length($&), ' ';
+		s/[=]+//; # remove trailing ===
+		print convert_format_markup($_), "\n";
+		next;
+	}
+
+	# Now the line is just plain text.
+	print convert_format_markup($_), "\n";
+}
