@@ -36,7 +36,7 @@ While the code-breaking algorithms are quite straightforward, much effort of thi
 
 ## Reference ##
 
-[Knuth (1976)](http://www.dcc.fc.up.pt/~sssousa/RM09101.pdf)
+[Knuth (1976)](http://www.cs.uni.edu/~wallingf/teaching/cs3530/resources/knuth-mastermind.pdf)
 published the first paper on Mastermind, where he introduced a heuristic strategy that aimed at minimizing the worst-case number of remaining possibilities.
 
 [Kooi (2005)](http://www.philos.rug.nl/~barteld/master.pdf)
